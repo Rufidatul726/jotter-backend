@@ -177,7 +177,7 @@ router.post("/file/unlock/:fileId", authMiddleware, async (req, res) => {
   res.json({ message: "File unlocked successfully", file });
 });
 
-router.get("/files", authMiddleware, async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   const files = await FileModel.find({ createdBy: req.user.id, isHidden: false });
 
   // Exclude hidden files & remove locked file paths
