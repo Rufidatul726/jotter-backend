@@ -26,7 +26,11 @@ const upload = multer({ storage: storage });
 const MAX_STORAGE = 15 * 1024 * 1024 * 1024;
 
 const getCategory = (filename) => {
-  const ext = filename.split(".").pop().toLowerCase();
+  const lastDotIndex = filename.lastIndexOf('.');
+  const ext = filename.slice(lastDotIndex + 1).toLowerCase();
+  
+  if (["mp4", "mkv", "avi", "mov", "webm"].includes(ext)) return "video";
+  if (["mp3", "wav", "ogg", "flac", "aac"].includes(ext)) return "audio";
   if (["jpg", "jpeg", "png", "gif", "bmp", "svg"].includes(ext)) return "image";
   if (["pdf"].includes(ext)) return "pdf";
   if (["txt", "md", "docx"].includes(ext)) return "note";
@@ -34,7 +38,7 @@ const getCategory = (filename) => {
 };
 
 router.post("/upload", authMiddleware, upload.array("files"), async (req, res) => {
-    const user = await User.findById(req.user.userId);
+    const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found" });
   
     let totalUploadSize = 0;
@@ -52,15 +56,15 @@ router.post("/upload", authMiddleware, upload.array("files"), async (req, res) =
         const folderName = relativePath.split("/").slice(0, -1).join("/"); // Extract folder path
         if (!folderMap[folderName]) {
           // Check if folder already exists in DB
-          let folder = await FileModel.findOne({ name: folderName, type: "folder", createdBy: req.user.userId });
+          let folder = await FileModel.findOne({ name: folderName, type: "folder", createdBy: req.user.id });
           
           if (!folder) {
-            folder = new File({
+            folder = new FileModel({
               name: folderName,
               type: "folder",
               category: getCategory(file.originalname),
               path: folderName,
-              createdBy: req.user.userId,
+              createdBy: req.user.id,
             });
             await folder.save();
           }
@@ -71,13 +75,14 @@ router.post("/upload", authMiddleware, upload.array("files"), async (req, res) =
       }
   
       // Save file
-      const newFile = new File({
+      const newFile = new FileModel({
         name: file.originalname.split("/").pop(), // Only file name
         type: "file",
+        category: getCategory(file.originalname),
         size: file.size,
         path: file.path,
         parentId: parentFolderId, // Attach to folder
-        createdBy: req.user.userId,
+        createdBy: req.user.id,
       });
   
       await newFile.save();
@@ -97,7 +102,7 @@ router.post("/upload", authMiddleware, upload.array("files"), async (req, res) =
   
 
   router.get("/files", authMiddleware, async (req, res) => {
-    const files = await FileModel.find({ createdBy: req.user.userId });
+    const files = await FileModel.find({ createdBy: req.user.id });
   
     const folderStructure = {};
     files.forEach(file => {
@@ -173,7 +178,7 @@ router.post("/file/unlock/:fileId", authMiddleware, async (req, res) => {
 });
 
 router.get("/files", authMiddleware, async (req, res) => {
-  const files = await FileModel.find({ createdBy: req.user.userId, isHidden: false });
+  const files = await FileModel.find({ createdBy: req.user.id, isHidden: false });
 
   // Exclude hidden files & remove locked file paths
   const filteredFiles = files.map(file => ({
@@ -185,12 +190,12 @@ router.get("/files", authMiddleware, async (req, res) => {
 });
 
 router.get("/files/favorites", authMiddleware, async (req, res) => {
-  const files = await FileModel.find({ createdBy: req.user.userId, isFavorite: true });
+  const files = await FileModel.find({ createdBy: req.user.id, isFavorite: true });
   res.json({ files });
 });
 
 router.get("files/hidden", authMiddleware, async (req, res) => {
-  const files = await FileModel.find({ createdBy: req.user.userId, isHidden: true });
+  const files = await FileModel.find({ createdBy: req.user.id, isHidden: true });
   res.json({ files });
 });
 
@@ -198,7 +203,7 @@ router.get("files/hidden", authMiddleware, async (req, res) => {
 
 router.get("/files/by-date", authMiddleware, async (req, res) => {
   try {
-    const files = await FileModel.find({ createdBy: req.user.userId }).sort({ createdAt: -1 });
+    const files = await FileModel.find({ createdBy: req.user.id }).sort({ createdAt: -1 });
 
     const groupedFiles = {};
     files.forEach((file) => {
